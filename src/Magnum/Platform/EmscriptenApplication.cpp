@@ -555,10 +555,24 @@ void EmscriptenApplication::setupCallbacks(bool resizable) {
     emscripten_set_mousemove_callback(_canvasTarget.data(), this, false,
         ([](int, const EmscriptenMouseEvent* event, void* userData) -> Int {
             auto& app = *static_cast<EmscriptenApplication*>(userData);
+            Vector2i position;
+#if 1
+            if(app.isPointerLockActive()) {
+                //position = {app._previousMouseMovePosition + Vector2i{Int(event->movementX), Int(event->movementY)}};
+                position = {Vector2i{Int(event->movementX), Int(event->movementY)}};
+                MouseMoveEvent e{*event,
+                   /* Avoid bogus offset at first -- report 0 when the event is
+                     called for the first time. */
+                   position};
+               app._previousMouseMovePosition = app._previousMouseMovePosition + position;
+               static_cast<EmscriptenApplication*>(userData)->mouseMoveEvent(e);
+               return e.isAccepted();
+            } else {
+#endif
             /* With DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR, canvasX/Y is
                not initialized, so we have to rely on the target being the
                canvas. That's always true for mouse events. */
-            Vector2i position{Int(event->targetX), Int(event->targetY)};
+               position = Vector2i{Int(event->targetX), Int(event->targetY)};
             MouseMoveEvent e{*event,
                 /* Avoid bogus offset at first -- report 0 when the event is
                    called for the first time. */
@@ -567,12 +581,30 @@ void EmscriptenApplication::setupCallbacks(bool resizable) {
             app._previousMouseMovePosition = position;
             static_cast<EmscriptenApplication*>(userData)->mouseMoveEvent(e);
             return e.isAccepted();
+            }
         }));
 
     emscripten_set_wheel_callback(_canvasTarget.data(), this, false,
         ([](int, const EmscriptenWheelEvent* event, void* userData) -> Int {
             MouseScrollEvent e{*event};
             static_cast<EmscriptenApplication*>(userData)->mouseScrollEvent(e);
+            return e.isAccepted();
+        }));
+
+    emscripten_set_pointerlockchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, this, false,
+        ([](int, const EmscriptenPointerlockChangeEvent* event, void* userData) -> Int {
+            bool status = event->isActive;
+            PointerLockEvent e{*event, status};
+            static_cast<EmscriptenApplication*>(userData)->pointerLockEvent(e);
+            //if(! event->isActive) static_cast<EmscriptenApplication*>(userData)->setupCallbacks(true);
+            return e.isAccepted();
+        }));
+
+    emscripten_set_fullscreenchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, this, false,
+        ([](int, const EmscriptenFullscreenChangeEvent* event, void* userData) -> Int {
+            bool status = event->isFullscreen;
+            FullscreenEvent e{*event, status};
+            static_cast<EmscriptenApplication*>(userData)->fullscreenEvent(e);
             return e.isAccepted();
         }));
 
@@ -747,6 +779,35 @@ EmscriptenApplication::Cursor EmscriptenApplication::cursor() {
     return _cursor;
 }
 
+void EmscriptenApplication::requestPointerLock() {
+  //emscripten_request_pointerlock(EMSCRIPTEN_EVENT_TARGET_SCREEN, 1);
+  Int ret = emscripten_request_pointerlock("#canvas", 1);
+  if(ret == EMSCRIPTEN_RESULT_SUCCESS) {
+    _flags |= Flag::PointerLockActive;
+  }
+}
+
+void EmscriptenApplication::exitPointerLock() {
+  Int ret = emscripten_exit_pointerlock();
+  if(ret == EMSCRIPTEN_RESULT_SUCCESS) {
+    _flags &= ~Flag::PointerLockActive;
+  }
+}
+
+void EmscriptenApplication::requestFullscreen() {
+  Int ret = emscripten_request_fullscreen("#canvas", 1);
+  //if(ret == EMSCRIPTEN_RESULT_SUCCESS) {
+    _flags |= Flag::FullscreenActive;
+  //}
+}
+
+void EmscriptenApplication::exitFullscreen() {
+  Int ret = emscripten_exit_fullscreen();
+  //if(ret == EMSCRIPTEN_RESULT_SUCCESS) {
+    _flags &= ~Flag::FullscreenActive;
+  //}
+}
+
 void EmscriptenApplication::startTextInput() {
     _flags |= Flag::TextInputActive;
 }
@@ -766,6 +827,8 @@ void EmscriptenApplication::mousePressEvent(MouseEvent&) {}
 void EmscriptenApplication::mouseReleaseEvent(MouseEvent&) {}
 void EmscriptenApplication::mouseMoveEvent(MouseMoveEvent&) {}
 void EmscriptenApplication::mouseScrollEvent(MouseScrollEvent&) {}
+void EmscriptenApplication::pointerLockEvent(PointerLockEvent&) {}
+void EmscriptenApplication::fullscreenEvent(FullscreenEvent&) {}
 void EmscriptenApplication::textInputEvent(TextInputEvent&) {}
 
 #ifdef MAGNUM_TARGET_GL

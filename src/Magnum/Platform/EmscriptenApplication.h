@@ -59,6 +59,8 @@ struct EmscriptenKeyboardEvent;
 struct EmscriptenMouseEvent;
 struct EmscriptenWheelEvent;
 struct EmscriptenUiEvent;
+struct EmscriptenPointerlockChangeEvent;
+struct EmscriptenFullscreenChangeEvent;
 typedef int EMSCRIPTEN_WEBGL_CONTEXT_HANDLE;
 #endif
 
@@ -278,6 +280,8 @@ class EmscriptenApplication {
         class MouseEvent;
         class MouseMoveEvent;
         class MouseScrollEvent;
+        class PointerLockEvent;
+        class FullscreenEvent;
         class KeyEvent;
         class TextInputEvent;
 
@@ -554,6 +558,34 @@ class EmscriptenApplication {
         /** @copydoc Sdl2Application::redraw() */
         void redraw();
 
+        /**
+         * @brief Request PointerLock
+         *
+         */
+
+        void requestPointerLock();
+
+        /**
+         * @brief Exit PointerLock
+         *
+         */
+        void exitPointerLock();
+
+        /**
+         * @brief Request Fullscreen
+         *
+         */
+
+        void requestFullscreen();
+
+        /**
+         * @brief Exit Fullscreen
+         *
+         */
+        void exitFullscreen();
+
+
+
     private:
         /** @copydoc GlfwApplication::viewportEvent(ViewportEvent&) */
         virtual void viewportEvent(ViewportEvent& event);
@@ -819,6 +851,19 @@ class EmscriptenApplication {
          */
         virtual void mouseScrollEvent(MouseScrollEvent& event);
 
+        /**
+         * @brief Pointer lock event
+         *
+         */
+        virtual void pointerLockEvent(PointerLockEvent& event);
+
+         /**
+         * @brief Fullscreen event
+         *
+         */
+        virtual void fullscreenEvent(FullscreenEvent& event);
+
+
         /* Since 1.8.17, the original short-hand group closing doesn't work
            anymore. FFS. */
         /**
@@ -827,6 +872,20 @@ class EmscriptenApplication {
 
         /** @{ @name Text input handling */
     public:
+
+        /** @brief Whether pointer lock is active
+         * @see @ref requestPointerLock(), @ref exitPointerLock()
+         */
+        bool isPointerLockActive() const {
+          return !!( _flags & Flag::PointerLockActive);
+        }
+
+        /** @brief Whether fullscreen is active
+         * @see @ref requestFullscreen(), @ref exitFullscreen()
+         */
+        bool isFullscreenActive() const {
+          return !!( _flags & Flag::FullscreenActive);
+        }
         /**
          * @brief Whether text input is active
          *
@@ -888,7 +947,9 @@ class EmscriptenApplication {
             Redraw = 1 << 0,
             TextInputActive = 1 << 1,
             ExitRequested = 1 << 2,
-            LoopActive = 1 << 3
+            LoopActive = 1 << 3,
+            PointerLockActive = 1 << 4,
+            FullscreenActive = 1 << 5,
         };
         typedef Containers::EnumSet<Flag> Flags;
 
@@ -1641,6 +1702,40 @@ class EmscriptenApplication::MouseScrollEvent: public EmscriptenApplication::Inp
         explicit MouseScrollEvent(const EmscriptenWheelEvent& event): _event(event) {}
 
         const EmscriptenWheelEvent& _event;
+};
+
+/**
+@brief Pointer lock event
+*/
+
+class EmscriptenApplication::PointerLockEvent: public EmscriptenApplication::InputEvent {
+    public:
+        /** @brief Underlying Emscripten event */
+        const EmscriptenPointerlockChangeEvent& event() const { return _event; }
+        bool isActive() const { return _isActive; }
+
+    private:
+        friend EmscriptenApplication;
+        explicit PointerLockEvent(const EmscriptenPointerlockChangeEvent& event, bool isActive): _event(event), _isActive(isActive) {}
+        const EmscriptenPointerlockChangeEvent& _event;
+        bool _isActive;
+};
+
+/**
+@brief Fullscreen event
+*/
+
+class EmscriptenApplication::FullscreenEvent: public EmscriptenApplication::InputEvent {
+    public:
+        /** @brief Underlying Emscripten event */
+        const EmscriptenFullscreenChangeEvent& event() const { return _event; }
+        bool isFullscreen() const { return _isFullscreen; }
+
+    private:
+        friend EmscriptenApplication;
+        explicit FullscreenEvent(const EmscriptenFullscreenChangeEvent& event, bool isFullscreen): _event(event), _isFullscreen(isFullscreen) {}
+        const EmscriptenFullscreenChangeEvent& _event;
+        bool _isFullscreen;
 };
 
 /**
